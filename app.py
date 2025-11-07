@@ -921,13 +921,894 @@ def show_project_management(df_obras, df_asistencias, df_empleados):
         )
         st.plotly_chart(fig, use_container_width=True)
 
-# ... (las otras funciones show_aptitude_analysis, show_advanced_analytics, show_early_warnings, 
-# show_financial_analysis, show_turnover_analysis, show_configuration, show_dashboard_manual 
-# se mantienen exactamente igual que en el código anterior que funcionaba bien)
+def show_aptitude_analysis(df_empleados, df_obras):
+    st.markdown('<div class="section-header">🎯 Análisis de Aptitud para Obras</div>', unsafe_allow_html=True)
+    
+    # Filtros para análisis de aptitud
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        obra_seleccionada = st.selectbox(
+            "🏗️ Seleccionar Obra para Análisis",
+            options=df_obras['nombre'].tolist(),
+            index=0
+        )
+    
+    with col2:
+        departamento_filtro = st.selectbox(
+            "🏢 Departamento",
+            options=['Todos'] + df_empleados['departamento'].unique().tolist(),
+            index=0
+        )
+    
+    with col3:
+        aptitud_filtro = st.selectbox(
+            "✅ Estado Aptitud",
+            options=['Todos', 'Aptos', 'No Aptos'],
+            index=0
+        )
+    
+    # Obtener datos de la obra seleccionada
+    obra_info = df_obras[df_obras['nombre'] == obra_seleccionada].iloc[0]
+    
+    # Mostrar requisitos de la obra
+    st.subheader(f"📋 Requisitos de la Obra: {obra_info['nombre']}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.info(f"**Tipo:** {obra_info['tipo']}")
+        st.info(f"**Complejidad:** {obra_info['complejidad']}")
+    
+    with col2:
+        st.info(f"**Apto Obra Compleja:** {'✅ Sí' if obra_info['requiere_apto_obra_compleja'] else '❌ No'}")
+        st.info(f"**Exp. Mínima:** {obra_info['experiencia_minima_meses']} meses")
+    
+    with col3:
+        st.info(f"**Vehículo Requerido:** {'✅ Sí' if obra_info['requiere_vehiculo'] else '❌ No'}")
+        st.info(f"**Zona de Riesgo:** {'⚠️ Sí' if obra_info['zona_riesgo'] else '✅ No'}")
+    
+    with col4:
+        st.info(f"**Ubicación:** {obra_info['ubicacion']}")
+        st.info(f"**Presupuesto:** ${obra_info['presupuesto']:,.0f}")
+    
+    # Filtrar empleados según aptitud
+    empleados_filtrados = df_empleados[df_empleados['activo']].copy()
+    
+    if departamento_filtro != 'Todos':
+        empleados_filtrados = empleados_filtrados[empleados_filtrados['departamento'] == departamento_filtro]
+    
+    # Calcular aptitud para la obra seleccionada
+    def calcular_aptitud(empleado, obra):
+        criterios_cumplidos = 0
+        criterios_totales = 4
+        
+        # Criterio 1: Aptitud para obra compleja
+        if not obra['requiere_apto_obra_compleja'] or empleado['apto_obra_compleja']:
+            criterios_cumplidos += 1
+        
+        # Criterio 2: Experiencia mínima
+        if empleado['experiencia_meses'] >= obra['experiencia_minima_meses']:
+            criterios_cumplidos += 1
+        
+        # Criterio 3: Vehículo propio (si se requiere)
+        if not obra['requiere_vehiculo'] or empleado['vehiculo_propio']:
+            criterios_cumplidos += 1
+        
+        # Criterio 4: Evaluación de desempeño
+        if empleado['evaluacion_desempeno'] >= 70:
+            criterios_cumplidos += 1
+        
+        porcentaje_aptitud = (criterios_cumplidos / criterios_totales) * 100
+        return porcentaje_aptitud, criterios_cumplidos
+    
+    # Aplicar cálculo de aptitud
+    aptitudes = []
+    for _, emp in empleados_filtrados.iterrows():
+        aptitud, criterios = calcular_aptitud(emp, obra_info)
+        aptitudes.append({
+            'empleado': emp,
+            'porcentaje_aptitud': aptitud,
+            'criterios_cumplidos': criterios,
+            'apto': aptitud >= 75
+        })
+    
+    # Filtrar por aptitud si se seleccionó
+    if aptitud_filtro == 'Aptos':
+        aptitudes = [apt for apt in aptitudes if apt['apto']]
+    elif aptitud_filtro == 'No Aptos':
+        aptitudes = [apt for apt in aptitudes if not apt['apto']]
+    
+    # Mostrar resultados
+    st.subheader(f"👥 Empleados {aptitud_filtro} - {len(aptitudes)} encontrados")
+    
+    # Métricas de aptitud
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_aptos = sum(1 for apt in aptitudes if apt['apto'])
+        st.metric("✅ Total Aptos", total_aptos)
+    
+    with col2:
+        aptitud_promedio = np.mean([apt['porcentaje_aptitud'] for apt in aptitudes])
+        st.metric("📊 Aptitud Promedio", f"{aptitud_promedio:.1f}%")
+    
+    with col3:
+        criterios_promedio = np.mean([apt['criterios_cumplidos'] for apt in aptitudes])
+        st.metric("🎯 Criterios Cumplidos", f"{criterios_promedio:.1f}/4")
+    
+    with col4:
+        porcentaje_aptos = (total_aptos / len(aptitudes)) * 100 if aptitudes else 0
+        st.metric("📈 % de Aptos", f"{porcentaje_aptos:.1f}%")
+    
+    # Mostrar empleados con tarjetas
+    st.subheader("📋 Detalle de Empleados")
+    
+    for aptitud in aptitudes:
+        emp = aptitud['empleado']
+        card_class = "apto-card" if aptitud['apto'] else "no-apto-card"
+        
+        st.markdown(f'<div class="employee-card {card_class}">', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+        
+        with col1:
+            st.write(f"**{emp['nombre']} {emp['apellido']}**")
+            st.write(f"*{emp['especialidad']} - {emp['departamento']}*")
+            st.write(f"📅 Exp: {emp['experiencia_meses']} meses | 🎂 Edad: {emp['edad']} años")
+            st.write(f"🔹 **Tipo:** {emp['tipo_empleado'].title()}")
+        
+        with col2:
+            st.write(f"📊 Evaluación: {emp['evaluacion_desempeno']:.1f}%")
+            st.write(f"🎓 Certificaciones: {emp['certificaciones']}")
+            st.write(f"🚗 Vehículo: {'✅ Sí' if emp['vehiculo_propio'] else '❌ No'}")
+        
+        with col3:
+            aptitud_color = "🟢" if aptitud['apto'] else "🔴"
+            st.write(f"**{aptitud_color} Aptitud: {aptitud['porcentaje_aptitud']:.0f}%**")
+            st.write(f"✅ {aptitud['criterios_cumplidos']}/4 criterios")
+        
+        with col4:
+            if aptitud['apto']:
+                st.success("**APTO**")
+                if st.button("📋 Asignar", key=f"asignar_{emp['id']}"):
+                    st.success(f"✅ {emp['nombre']} asignado a {obra_seleccionada}")
+            else:
+                st.error("**NO APTO**")
+                st.button("📋 Asignar", key=f"asignar_{emp['id']}", disabled=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# NOTA: Para mantener la respuesta dentro del límite, las funciones restantes son idénticas
-# al código anterior que ya funcionaba. Solo se han modificado show_executive_dashboard y show_person_management
-# para incluir la distinción entre empleados efectivos y contratados.
+    # Gráfico de distribución de aptitud
+    if aptitudes:
+        st.subheader("📊 Análisis de Aptitud")
+        
+        aptitud_data = pd.DataFrame([{
+            'Aptitud': apt['porcentaje_aptitud'],
+            'Departamento': apt['empleado']['departamento'],
+            'Apto': 'Apto' if apt['apto'] else 'No Apto'
+        } for apt in aptitudes])
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig = create_advanced_plotly_chart(
+                aptitud_data,
+                'Distribución de Niveles de Aptitud',
+                'histogram',
+                x='Aptitud',
+                color='Apto',
+                nbins=20
+            )
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            dept_aptitud = aptitud_data.groupby('Departamento')['Aptitud'].mean().reset_index()
+            fig = create_advanced_plotly_chart(
+                dept_aptitud,
+                'Aptitud Promedio por Departamento',
+                'bar',
+                x='Departamento',
+                y='Aptitud',
+                color='Aptitud',
+                color_continuous_scale='RdYlGn'
+            )
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+
+def show_advanced_analytics(df_empleados, df_asistencias):
+    st.markdown('<div class="section-header">📈 Analytics Avanzado</div>', unsafe_allow_html=True)
+    
+    # Análisis predictivo de rotación
+    st.subheader("🔮 Predicción de Rotación")
+    
+    # Simular análisis predictivo
+    df_analytics = df_empleados[df_empleados['activo']].copy()
+    
+    # Crear características para el modelo (simulado)
+    df_analytics['riesgo_rotacion'] = np.random.normal(0.3, 0.2, len(df_analytics))
+    df_analytics['riesgo_rotacion'] = df_analytics['riesgo_rotacion'].clip(0, 1)
+    
+    # Clasificar riesgo
+    def clasificar_riesgo(score):
+        if score > 0.7:
+            return 'Alto'
+        elif score > 0.4:
+            return 'Medio'
+        else:
+            return 'Bajo'
+    
+    df_analytics['nivel_riesgo'] = df_analytics['riesgo_rotacion'].apply(clasificar_riesgo)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        alto_riesgo = len(df_analytics[df_analytics['nivel_riesgo'] == 'Alto'])
+        st.metric("🔴 Alto Riesgo", alto_riesgo)
+    
+    with col2:
+        medio_riesgo = len(df_analytics[df_analytics['nivel_riesgo'] == 'Medio'])
+        st.metric("🟡 Medio Riesgo", medio_riesgo)
+    
+    with col3:
+        bajo_riesgo = len(df_analytics[df_analytics['nivel_riesgo'] == 'Bajo'])
+        st.metric("🟢 Bajo Riesgo", bajo_riesgo)
+    
+    # Gráficos de análisis avanzado
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Matriz de correlación
+        numeric_cols = ['edad', 'experiencia_meses', 'salario', 'evaluacion_desempeno', 'ausencias_ultimo_mes']
+        corr_matrix = df_analytics[numeric_cols].corr()
+        
+        fig = px.imshow(
+            corr_matrix,
+            title='Matriz de Correlación entre Variables',
+            color_continuous_scale='RdBu_r',
+            aspect='auto'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Segmentación por desempeño y potencial
+        fig = px.scatter(
+            df_analytics,
+            x='evaluacion_desempeno',
+            y='experiencia_meses',
+            color='nivel_riesgo',
+            size='salario',
+            title='Segmentación: Desempeño vs Experiencia',
+            hover_data=['nombre', 'apellido', 'departamento'],
+            color_discrete_map={'Alto': 'red', 'Medio': 'orange', 'Bajo': 'green'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Análisis de clusters
+    st.subheader("🎯 Segmentación Avanzada")
+    
+    # Simular clusters
+    df_analytics['cluster'] = np.random.choice(['A - Alto Potencial', 'B - Estables', 'C - Necesitan Soporte'], 
+                                              len(df_analytics), p=[0.2, 0.6, 0.2])
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        cluster_counts = df_analytics['cluster'].value_counts()
+        fig = px.bar(
+            x=cluster_counts.index,
+            y=cluster_counts.values,
+            title='Distribución de Segmentos',
+            color=cluster_counts.index,
+            labels={'x': 'Segmento', 'y': 'Cantidad'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Análisis de composición salarial por segmento
+        fig = px.box(
+            df_analytics,
+            x='cluster',
+            y='salario',
+            title='Distribución Salarial por Segmento',
+            color='cluster'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+def show_early_warnings(df_empleados, df_obras, df_asistencias):
+    st.markdown('<div class="section-header">⚠️ Sistema de Alertas Tempranas</div>', unsafe_allow_html=True)
+    
+    # Alertas de empleados
+    st.subheader("👥 Alertas de Personal")
+    
+    # Generar alertas simuladas
+    alertas_empleados = []
+    
+    # Alertas por bajo desempeño
+    bajo_desempeno = df_empleados[
+        (df_empleados['activo']) & 
+        (df_empleados['evaluacion_desempeno'] < 70)
+    ]
+    for _, emp in bajo_desempeno.iterrows():
+        alertas_empleados.append({
+            'tipo': 'Bajo Desempeño',
+            'nivel': 'Alto',
+            'descripcion': f"{emp['nombre']} {emp['apellido']} - Evaluación: {emp['evaluacion_desempeno']:.1f}%",
+            'departamento': emp['departamento']
+        })
+    
+    # Alertas por alto ausentismo
+    alto_ausentismo = df_empleados[
+        (df_empleados['activo']) & 
+        (df_empleados['ausencias_ultimo_mes'] > 3)
+    ]
+    for _, emp in alto_ausentismo.iterrows():
+        alertas_empleados.append({
+            'tipo': 'Alto Ausentismo',
+            'nivel': 'Medio',
+            'descripcion': f"{emp['nombre']} {emp['apellido']} - {emp['ausencias_ultimo_mes']} ausencias/mes",
+            'departamento': emp['departamento']
+        })
+    
+    # Mostrar alertas de empleados
+    for alerta in alertas_empleados:
+        if alerta['nivel'] == 'Alto':
+            st.markdown(f'<div class="alert-high">', unsafe_allow_html=True)
+        elif alerta['nivel'] == 'Medio':
+            st.markdown(f'<div class="alert-medium">', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="alert-low">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            st.write(f"**{alerta['tipo']}**")
+            st.write(f"Departamento: {alerta['departamento']}")
+        
+        with col2:
+            st.write(alerta['descripcion'])
+        
+        with col3:
+            if st.button("📋 Acción", key=f"accion_{alerta['descripcion']}"):
+                st.success(f"Acción tomada para {alerta['descripcion']}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Alertas de obras
+    st.subheader("🏗️ Alertas de Obras")
+    
+    alertas_obras = []
+    
+    # Obras en riesgo
+    obras_riesgo = df_obras[df_obras['estado'] == 'En Riesgo']
+    for _, obra in obras_riesgo.iterrows():
+        alertas_obras.append({
+            'tipo': 'Obra en Riesgo',
+            'nivel': 'Alto',
+            'descripcion': f"{obra['nombre']} - {obra['ubicacion']}",
+            'presupuesto': obra['presupuesto']
+        })
+    
+    # Obras sin gerente asignado (simulado)
+    for _, obra in df_obras.sample(2).iterrows():
+        alertas_obras.append({
+            'tipo': 'Falta Recursos',
+            'nivel': 'Medio',
+            'descripcion': f"{obra['nombre']} - Necesita más personal especializado",
+            'presupuesto': obra['presupuesto']
+        })
+    
+    # Mostrar alertas de obras
+    for alerta in alertas_obras:
+        if alerta['nivel'] == 'Alto':
+            st.markdown(f'<div class="alert-high">', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="alert-medium">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            st.write(f"**{alerta['tipo']}**")
+            st.write(f"Presupuesto: ${alerta['presupuesto']:,.0f}")
+        
+        with col2:
+            st.write(alerta['descripcion'])
+        
+        with col3:
+            if st.button("🔧 Resolver", key=f"resolver_{alerta['descripcion']}"):
+                st.success(f"Problema resuelto para {alerta['descripcion']}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Métricas de alertas
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("📊 Total Alertas", len(alertas_empleados) + len(alertas_obras))
+    
+    with col2:
+        alertas_altas = len([a for a in alertas_empleados + alertas_obras if a['nivel'] == 'Alto'])
+        st.metric("🔴 Alertas Altas", alertas_altas)
+    
+    with col3:
+        alertas_medias = len([a for a in alertas_empleados + alertas_obras if a['nivel'] == 'Medio'])
+        st.metric("🟡 Alertas Medias", alertas_medias)
+    
+    with col4:
+        st.metric("✅ Resueltas Hoy", np.random.randint(2, 8))
+
+def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
+    st.markdown('<div class="section-header">💰 Análisis Financiero Integral</div>', unsafe_allow_html=True)
+    
+    # Métricas financieras
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_gastos = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Gasto']['monto'].sum()
+        st.metric("💸 Gastos Totales", f"${total_gastos:,.0f}")
+    
+    with col2:
+        total_beneficios = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Beneficio']['monto'].sum()
+        st.metric("💰 Beneficios Totales", f"${total_beneficios:,.0f}")
+    
+    with col3:
+        balance = total_beneficios - total_gastos
+        st.metric("⚖️ Balance Neto", f"${balance:,.0f}", 
+                 delta=f"{(balance/total_gastos*100 if total_gastos > 0 else 0):.1f}%")
+    
+    with col4:
+        roi = (total_beneficios / total_gastos * 100) if total_gastos > 0 else 0
+        st.metric("📈 ROI", f"{roi:.1f}%")
+    
+    # Gráficos de análisis financiero
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Gastos vs Beneficios por obra
+        gb_por_obra = df_gastos_beneficios.merge(df_obras, left_on='obra_id', right_on='id')
+        gb_pivot = gb_por_obra.pivot_table(
+            values='monto', 
+            index='nombre', 
+            columns='tipo', 
+            aggfunc='sum'
+        ).fillna(0)
+        
+        fig = px.bar(
+            gb_pivot.reset_index(),
+            x='nombre',
+            y=['Gasto', 'Beneficio'],
+            title='Gastos vs Beneficios por Obra',
+            barmode='group'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Evolución temporal de gastos y beneficios
+        df_gastos_beneficios['fecha'] = pd.to_datetime(df_gastos_beneficios['fecha'])
+        df_gastos_beneficios['mes'] = df_gastos_beneficios['fecha'].dt.to_period('M').astype(str)
+        
+        evolucion_mensual = df_gastos_beneficios.groupby(['mes', 'tipo'])['monto'].sum().reset_index()
+        
+        fig = px.line(
+            evolucion_mensual,
+            x='mes',
+            y='monto',
+            color='tipo',
+            title='Evolución Mensual de Gastos y Beneficios',
+            markers=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Análisis detallado por concepto
+    st.subheader("📊 Análisis Detallado por Concepto")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Gastos por concepto
+        gastos_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Gasto']
+        gastos_por_concepto = gastos_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
+        
+        fig = px.pie(
+            values=gastos_por_concepto.values,
+            names=gastos_por_concepto.index,
+            title='Distribución de Gastos por Concepto'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Beneficios por concepto
+        beneficios_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Beneficio']
+        beneficios_por_concepto = beneficios_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
+        
+        fig = px.bar(
+            x=beneficios_por_concepto.values,
+            y=beneficios_por_concepto.index,
+            title='Beneficios por Concepto',
+            orientation='h'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+def show_turnover_analysis(df_rotacion, df_empleados):
+    st.markdown('<div class="section-header">🔄 Análisis de Rotación Personal</div>', unsafe_allow_html=True)
+    
+    # Métricas de rotación
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        rotacion_promedio = df_rotacion['rotacion_mensual'].mean() * 100
+        st.metric("📊 Rotación Promedio", f"{rotacion_promedio:.1f}%")
+    
+    with col2:
+        total_salidos = df_rotacion['empleados_salidos'].sum()
+        st.metric("👋 Empleados Salidos", total_salidos)
+    
+    with col3:
+        costo_total_rotacion = df_rotacion['costo_rotacion'].sum()
+        st.metric("💸 Costo Total Rotación", f"${costo_total_rotacion:,.0f}")
+    
+    with col4:
+        costo_promedio_rotacion = df_rotacion['costo_rotacion'].mean()
+        st.metric("💰 Costo Promedio por Rotación", f"${costo_promedio_rotacion:,.0f}")
+    
+    # Filtros para análisis de rotación
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        dept_filter = st.selectbox(
+            "🏢 Departamento",
+            options=['Todos'] + df_rotacion['departamento'].unique().tolist(),
+            key="rotacion_dept"
+        )
+    
+    with col2:
+        area_filter = st.selectbox(
+            "📍 Área",
+            options=['Todos'] + df_rotacion['area'].unique().tolist(),
+            key="rotacion_area"
+        )
+    
+    with col3:
+        ciudad_filter = st.selectbox(
+            "🏙️ Ciudad",
+            options=['Todos'] + df_rotacion['ciudad'].unique().tolist(),
+            key="rotacion_ciudad"
+        )
+    
+    # Aplicar filtros
+    filtered_rotacion = df_rotacion.copy()
+    
+    if dept_filter != 'Todos':
+        filtered_rotacion = filtered_rotacion[filtered_rotacion['departamento'] == dept_filter]
+    
+    if area_filter != 'Todos':
+        filtered_rotacion = filtered_rotacion[filtered_rotacion['area'] == area_filter]
+    
+    if ciudad_filter != 'Todos':
+        filtered_rotacion = filtered_rotacion[filtered_rotacion['ciudad'] == ciudad_filter]
+    
+    # Gráficos de análisis de rotación
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Rotación por departamento
+        rotacion_dept = filtered_rotacion.groupby('departamento')['rotacion_mensual'].mean().sort_values(ascending=False)
+        
+        fig = px.bar(
+            x=rotacion_dept.index,
+            y=rotacion_dept.values * 100,
+            title='Rotación Promedio por Departamento (%)',
+            labels={'x': 'Departamento', 'y': 'Rotación (%)'},
+            color=rotacion_dept.values,
+            color_continuous_scale='Reds'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Rotación por puesto
+        rotacion_puesto = filtered_rotacion.groupby('puesto')['rotacion_mensual'].mean().sort_values(ascending=False)
+        
+        fig = px.bar(
+            x=rotacion_puesto.index,
+            y=rotacion_puesto.values * 100,
+            title='Rotación Promedio por Puesto (%)',
+            labels={'x': 'Puesto', 'y': 'Rotación (%)'},
+            color=rotacion_puesto.values,
+            color_continuous_scale='Oranges'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Análisis geográfico de rotación
+    st.subheader("🗺️ Análisis Geográfico de Rotación")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Rotación por área
+        rotacion_area = filtered_rotacion.groupby('area')['rotacion_mensual'].mean().sort_values(ascending=False)
+        
+        fig = px.pie(
+            values=rotacion_area.values * 100,
+            names=rotacion_area.index,
+            title='Distribución de Rotación por Área (%)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Rotación por ciudad
+        rotacion_ciudad = filtered_rotacion.groupby('ciudad')['rotacion_mensual'].mean().sort_values(ascending=False)
+        
+        fig = px.bar(
+            x=rotacion_ciudad.index,
+            y=rotacion_ciudad.values * 100,
+            title='Rotación Promedio por Ciudad (%)',
+            labels={'x': 'Ciudad', 'y': 'Rotación (%)'},
+            color=rotacion_ciudad.values,
+            color_continuous_scale='Purples'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Heatmap de rotación (corregido)
+    st.subheader("🌐 Mapa de Calor - Rotación por Departamento y Área")
+    
+    try:
+        # Crear matriz para heatmap
+        heatmap_data = filtered_rotacion.pivot_table(
+            values='rotacion_mensual', 
+            index='departamento', 
+            columns='area', 
+            aggfunc='mean'
+        ).fillna(0) * 100
+        
+        fig = px.imshow(
+            heatmap_data,
+            title='Rotación por Departamento y Área (%)',
+            color_continuous_scale='RdYlBu_r',
+            aspect='auto',
+            labels=dict(x="Área", y="Departamento", color="Rotación (%)")
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error generando el heatmap: {str(e)}")
+        # Alternativa si falla el heatmap
+        st.info("Mostrando datos en formato tabla:")
+        st.dataframe(heatmap_data)
+
+def show_configuration():
+    st.markdown('<div class="section-header">⚙️ Configuración del Sistema</div>', unsafe_allow_html=True)
+    
+    # Configuración de parámetros
+    st.subheader("📋 Parámetros del Sistema")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.number_input("Umbral Bajo Desempeño (%)", min_value=0, max_value=100, value=70)
+        st.number_input("Umbral Alto Ausentismo (días/mes)", min_value=1, max_value=30, value=3)
+        st.number_input("Porcentaje Mínimo Aptitud", min_value=0, max_value=100, value=75)
+    
+    with col2:
+        st.number_input("Horas Extra Máximas Semanales", min_value=1, max_value=20, value=10)
+        st.number_input("Experiencia Mínima Obra Compleja (meses)", min_value=1, max_value=60, value=24)
+        st.number_input("Evaluación Mínima Promoción", min_value=0, max_value=100, value=80)
+    
+    # Configuración de notificaciones
+    st.subheader("🔔 Configuración de Notificaciones")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.checkbox("Alertas de Bajo Desempeño", value=True)
+        st.checkbox("Alertas de Alto Ausentismo", value=True)
+        st.checkbox("Alertas de Rotación", value=True)
+    
+    with col2:
+        st.checkbox("Notificaciones de Obras en Riesgo", value=True)
+        st.checkbox("Reportes Semanales Automáticos", value=True)
+        st.checkbox("Recordatorios de Evaluaciones", value=True)
+    
+    with col3:
+        st.selectbox("Frecuencia de Reportes", ["Diario", "Semanal", "Mensual"])
+        st.selectbox("Método de Notificación", ["Email", "SMS", "Ambos"])
+        st.text_input("Email de Contacto", "admin@empresa.com")
+    
+    # Configuración de integraciones
+    st.subheader("🔗 Integraciones")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.text_input("API Key Sistema de Nómina")
+        st.text_input("URL Base de Datos")
+        st.text_input("Token de Autenticación")
+    
+    with col2:
+        st.checkbox("Sincronización Automática", value=True)
+        st.number_input("Intervalo Sincronización (min)", min_value=5, max_value=1440, value=60)
+        st.selectbox("Nivel de Log", ["DEBUG", "INFO", "WARNING", "ERROR"])
+    
+    # Acciones del sistema
+    st.subheader("🛠️ Acciones del Sistema")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🔄 Sincronizar Datos", use_container_width=True):
+            st.success("Datos sincronizados correctamente")
+        
+        if st.button("📊 Generar Reporte", use_container_width=True):
+            st.success("Reporte generado y enviado")
+    
+    with col2:
+        if st.button("💾 Respaldar Base", use_container_width=True):
+            st.success("Respaldo completado exitosamente")
+        
+        if st.button("🧹 Limpiar Cache", use_container_width=True):
+            st.success("Cache limpiado correctamente")
+    
+    with col3:
+        if st.button("🔍 Ver Logs", use_container_width=True):
+            st.info("Mostrando logs del sistema...")
+        
+        if st.button("🔄 Reiniciar Sistema", use_container_width=True):
+            st.warning("Reiniciando sistema...")
+
+def show_dashboard_manual():
+    st.markdown('<div class="section-header">📖 Manual del Dashboard RRHH Analytics Pro</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="manual-section">
+    <h3>🎯 Descripción General</h3>
+    <p>El <strong>RRHH Analytics Pro</strong> es un sistema integral de gestión de recursos humanos diseñado para la industria de la construcción. 
+    Combina análisis avanzados, visualizaciones interactivas y herramientas de gestión para optimizar la fuerza laboral.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Módulos del Dashboard
+    st.subheader("📋 Módulos Disponibles")
+    
+    modules_info = {
+        "📊 Dashboard Ejecutivo": {
+            "descripción": "Vista general con métricas clave y visualizaciones ejecutivas",
+            "insights": [
+                "Tendencias de productividad en tiempo real",
+                "Distribución de costos por departamento", 
+                "Análisis comparativo entre ubicaciones",
+                "Evolución temporal de indicadores clave"
+            ],
+            "visualizaciones": ["Mapas de calor", "Sunburst charts", "Violin plots", "Gráficos de tendencia"]
+        },
+        "👥 Gestión de Personal": {
+            "descripción": "Gestión completa del capital humano con filtros avanzados",
+            "insights": [
+                "Composición de la fuerza laboral por departamento",
+                "Análisis de compensación y equidad salarial",
+                "Distribución de habilidades y certificaciones",
+                "Segmentación por nivel educativo y experiencia"
+            ],
+            "visualizaciones": ["Tablas interactivas", "Gráficos de barras", "Scatter plots", "Box plots"]
+        },
+        "🏗️ Gestión de Obras": {
+            "descripción": "Seguimiento y control de proyectos de construcción",
+            "insights": [
+                "Estado y progreso de obras activas",
+                "Asignación óptima de recursos por proyecto",
+                "Análisis de riesgos y alertas tempranas",
+                "Control de presupuestos y cronogramas"
+            ],
+            "visualizaciones": ["Tarjetas de proyecto", "Gráficos de estado", "Métricas de progreso"]
+        },
+        "🎯 Aptitud para Obras": {
+            "descripción": "Sistema inteligente de matching empleado-obra",
+            "insights": [
+                "Evaluación automática de compatibilidad",
+                "Identificación de brechas de habilidades",
+                "Optimización de asignaciones",
+                "Análisis de criterios de aptitud"
+            ],
+            "visualizaciones": ["Tarjetas de aptitud", "Histogramas de distribución", "Gráficos comparativos"]
+        },
+        "📈 Analytics Avanzado": {
+            "descripción": "Análisis predictivo y segmentación avanzada",
+            "insights": [
+                "Predicción de rotación voluntaria",
+                "Segmentación por desempeño y potencial",
+                "Análisis de correlaciones entre variables",
+                "Identificación de patrones de comportamiento"
+            ],
+            "visualizaciones": ["Matrices de correlación", "Scatter plots", "Gráficos de dispersión"]
+        },
+        "⚠️ Sistema de Alertas": {
+            "descripción": "Monitoreo proactivo de riesgos y oportunidades",
+            "insights": [
+                "Detección temprana de problemas de rendimiento",
+                "Alertas de rotación en departamentos críticos",
+                "Monitoreo de cumplimiento de metas",
+                "Identificación de oportunidades de mejora"
+            ],
+            "visualizaciones": ["Alertas codificadas por color", "Paneles de control", "Indicadores de riesgo"]
+        },
+        "💰 Análisis Financiero": {
+            "descripción": "Control y optimización de costos y beneficios",
+            "insights": [
+                "Seguimiento de gastos vs beneficios",
+                "Análisis de ROI por proyecto",
+                "Optimización de costos laborales",
+                "Proyecciones financieras"
+            ],
+            "visualizaciones": ["Gráficos de barras comparativos", "Líneas de tendencia", "Gráficos de torta"]
+        },
+        "🔄 Rotación Personal": {
+            "descripción": "Análisis multidimensional de la rotación de personal",
+            "insights": [
+                "Identificación de causas de rotación",
+                "Análisis de costos asociados",
+                "Segmentación por departamento y área",
+                "Estrategias de retención"
+            ],
+            "visualizaciones": ["Mapas de calor", "Gráficos de barras", "Análisis geográfico"]
+        }
+    }
+    
+    for module, info in modules_info.items():
+        with st.expander(f"{module} - {info['descripción']}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**🔍 Insights Principales:**")
+                for insight in info['insights']:
+                    st.write(f"• {insight}")
+            
+            with col2:
+                st.write("**📊 Visualizaciones:**")
+                for viz in info['visualizaciones']:
+                    st.write(f"• {viz}")
+    
+    # Guías de Uso
+    st.subheader("🛠️ Guías de Uso Rápido")
+    
+    usage_guides = {
+        "Filtros Avanzados": "Utiliza los filtros multinivel para segmentar datos específicos por departamento, ubicación, aptitud, etc.",
+        "Visualizaciones Interactivas": "Haz hover sobre los gráficos para ver detalles específicos. Usa zoom en gráficos complejos.",
+        "Exportación de Datos": "Todos los dataframes son exportables haciendo clic en el ícono de exportación.",
+        "Alertas Inteligentes": "Configura umbrales personalizados para recibir alertas proactivas.",
+        "Sistema de Aptitud": "Selecciona una obra específica para analizar la compatibilidad automática con empleados."
+    }
+    
+    for guide, description in usage_guides.items():
+        st.info(f"**{guide}:** {description}")
+    
+    # KPIs y Métricas Explicadas
+    st.subheader("📈 Explicación de Métricas Clave")
+    
+    kpis_explained = {
+        "Productividad": "Mide la eficiencia del trabajo realizado vs. tiempo invertido. Meta: >85%",
+        "Rotación": "Porcentaje de empleados que dejan la empresa. Meta: <8%", 
+        "Aptitud Obra Compleja": "Porcentaje de empleados calificados para obras de alta complejidad",
+        "Costo por Hora": "Costo laboral promedio por hora trabajada",
+        "Ausentismo": "Días de ausencia no programados por empleado/mes. Meta: <3 días",
+        "Evaluación Desempeño": "Calificación promedio en evaluaciones de desempeño. Meta: >80%"
+    }
+    
+    for kpi, explanation in kpis_explained.items():
+        st.write(f"**{kpi}:** {explanation}")
+    
+    # Consejos para Análisis
+    st.subheader("💡 Consejos para Análisis Efectivo")
+    
+    tips = [
+        "**Compara departamentos** para identificar mejores prácticas y oportunidades de mejora",
+        "**Monitorea tendencias temporales** para detectar patrones estacionales o cambios graduales",
+        "**Combina múltiples métricas** para obtener una visión holística del desempeño",
+        "**Utiliza el sistema de aptitud** para optimizar asignaciones y reducir riesgos",
+        "**Configura alertas personalizadas** para monitoreo proactivo de indicadores críticos",
+        "**Exporta datos específicos** para análisis más profundos en otras herramientas"
+    ]
+    
+    for tip in tips:
+        st.write(f"• {tip}")
 
 if __name__ == "__main__":
     main()
+ 
