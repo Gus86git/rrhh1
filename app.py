@@ -90,11 +90,13 @@ st.markdown("""
         border-left: 4px solid #e74c3c !important;
     }
     .manual-section {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
+        background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
         margin: 1rem 0;
-        border-left: 4px solid #3498db;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255,255,255,0.2);
     }
     .project-card {
         background: white;
@@ -127,6 +129,22 @@ st.markdown("""
     }
     .contratado-card {
         border-left: 4px solid #9b59b6 !important;
+    }
+    .manual-title {
+        color: #2c3e50;
+        font-size: 2.2rem;
+        text-align: center;
+        margin-bottom: 2rem;
+        font-weight: bold;
+    }
+    .manual-description {
+        background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255,255,255,0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -165,7 +183,15 @@ def load_data():
     ciudades = ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'Tucumán', 'La Plata']
     puestos = ['Operario', 'Supervisor', 'Coordinador', 'Gerente', 'Director']
     rubros = ['Mano de Obra', 'Materiales', 'Equipos', 'Logística', 'Administrativo']
-    consultoras = ['Constructora Norte', 'BuildCorp', 'Proyecta S.A.', 'Edifica Group']
+    
+    # Consultoras con CUIT y nombre
+    consultoras = [
+        {'cuit': '30-61234568-9', 'nombre': 'Adecco Argentina S.R.L.'},
+        {'cuit': '30-51234567-8', 'nombre': 'Manpower Argentina S.A.'},
+        {'cuit': '30-71199762-4', 'nombre': 'Nexo Group Assistance S.R.L.'},
+        {'cuit': '30-71609500-9', 'nombre': 'AP Soluciones en RRHH'},
+        {'cuit': '30-70048023-9', 'nombre': 'Randstad Argentina S.A.'}
+    ]
     
     empleados = []
     for i in range(200):
@@ -186,6 +212,7 @@ def load_data():
             precio_hora_comun = None
             precio_hora_extra = None
             consultora = None
+            cuit_consultora = None
         else:
             # Precios por hora para contratados
             precio_base_hora = {
@@ -195,7 +222,9 @@ def load_data():
             precio_hora_comun = precio_base_hora * np.random.uniform(0.9, 1.3)
             precio_hora_extra = precio_hora_comun * 1.5
             salario = None
-            consultora = np.random.choice(consultoras)
+            consultora_info = np.random.choice(consultoras)
+            consultora = consultora_info['nombre']
+            cuit_consultora = consultora_info['cuit']
         
         experiencia = np.random.randint(6, 180)
         edad = np.random.randint(22, 60)
@@ -227,6 +256,7 @@ def load_data():
             'precio_hora_comun': round(precio_hora_comun, 2) if precio_hora_comun else None,
             'precio_hora_extra': round(precio_hora_extra, 2) if precio_hora_extra else None,
             'consultora': consultora,
+            'cuit_consultora': cuit_consultora,
             'fecha_contratacion': datetime.now() - timedelta(days=np.random.randint(30, 365*5)),
             'experiencia_meses': experiencia,
             'ubicacion': np.random.choice(['Sede Central', 'Obra Norte', 'Obra Sur', 'Obra Este', 'Obra Oeste']),
@@ -551,20 +581,27 @@ def show_executive_dashboard(df_empleados, df_obras, df_asistencias, df_rotacion
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.subheader("📊 Sunburst - Distribución Jerárquica")
+        st.subheader("🏢 Empleados por Consultora")
         
-        sunburst_data = df_empleados[df_empleados['activo']].copy()
-        fig = create_advanced_plotly_chart(
-            sunburst_data,
-            'Distribución de Empleados por Departamento y Especialidad',
-            'sunburst',
-            path=['departamento', 'especialidad'],
-            values='experiencia_meses',
-            color='experiencia_meses',
-            color_continuous_scale='Blues'
-        )
-        if fig:
+        # Gráfico de empleados por consultora
+        consultora_data = df_empleados[df_empleados['tipo_empleado'] == 'contratado']
+        if not consultora_data.empty:
+            consultora_dist = consultora_data.groupby(['consultora', 'cuit_consultora']).size().reset_index(name='count')
+            consultora_dist['etiqueta'] = consultora_dist['consultora'] + '<br>' + consultora_dist['cuit_consultora']
+            
+            fig = px.bar(
+                consultora_dist,
+                x='etiqueta',
+                y='count',
+                title='Empleados Contratados por Consultora',
+                labels={'etiqueta': 'Consultora', 'count': 'Cantidad de Empleados'},
+                color='count',
+                color_continuous_scale='Viridis'
+            )
+            fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay empleados contratados para mostrar")
     
     # Tercera fila - Más visualizaciones
     col1, col2 = st.columns(2)
@@ -572,17 +609,20 @@ def show_executive_dashboard(df_empleados, df_obras, df_asistencias, df_rotacion
     with col1:
         st.subheader("🎻 Distribución Salarial - Violin Plot")
         
-        fig = create_advanced_plotly_chart(
-            df_empleados[df_empleados['activo']],
-            'Distribución Salarial por Departamento',
-            'violin',
-            x='departamento',
-            y='salario',
-            color='departamento',
-            box=True
-        )
-        if fig:
+        # Filtrar solo empleados efectivos para el gráfico de salarios
+        empleados_efectivos = df_empleados[(df_empleados['activo']) & (df_empleados['tipo_empleado'] == 'efectivo')]
+        if not empleados_efectivos.empty:
+            fig = px.violin(
+                empleados_efectivos,
+                x='departamento',
+                y='salario',
+                title='Distribución Salarial por Departamento',
+                color='departamento',
+                box=True
+            )
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay empleados efectivos para mostrar")
     
     with col2:
         st.subheader("📈 Tendencia Temporal - Productividad")
@@ -592,44 +632,12 @@ def show_executive_dashboard(df_empleados, df_obras, df_asistencias, df_rotacion
         
         productividad_mensual = df_asistencias.groupby('mes')['productividad'].mean().reset_index()
         
-        fig = create_advanced_plotly_chart(
+        fig = px.line(
             productividad_mensual,
-            'Evolución Mensual de Productividad',
-            'line',
             x='mes',
             y='productividad',
+            title='Evolución Mensual de Productividad',
             markers=True
-        )
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-    
-    # Cuarta fila - Nuevos análisis basados en el DER
-    st.subheader("🆕 Análisis Basados en el Modelo de Datos")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Análisis de consultoras
-        st.subheader("🏢 Empleados por Consultora")
-        consultora_dist = df_empleados[df_empleados['tipo_empleado'] == 'contratado'].groupby('consultora').size()
-        fig = px.bar(
-            x=consultora_dist.index,
-            y=consultora_dist.values,
-            title='Distribución de Empleados Contratados por Consultora',
-            labels={'x': 'Consultora', 'y': 'Cantidad de Empleados'},
-            color=consultora_dist.values,
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Análisis de rubros
-        st.subheader("📦 Distribución por Rubro")
-        rubro_dist = df_asistencias['rubro'].value_counts()
-        fig = px.pie(
-            values=rubro_dist.values,
-            names=rubro_dist.index,
-            title='Distribución de Horas por Rubro'
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1092,30 +1100,27 @@ def show_aptitude_analysis(df_empleados, df_obras):
         col1, col2 = st.columns(2)
         
         with col1:
-            fig = create_advanced_plotly_chart(
+            fig = px.histogram(
                 aptitud_data,
-                'Distribución de Niveles de Aptitud',
-                'histogram',
                 x='Aptitud',
                 color='Apto',
-                nbins=20
+                title='Distribución de Niveles de Aptitud',
+                nbins=20,
+                color_discrete_map={'Apto': '#2ecc71', 'No Apto': '#e74c3c'}
             )
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             dept_aptitud = aptitud_data.groupby('Departamento')['Aptitud'].mean().reset_index()
-            fig = create_advanced_plotly_chart(
+            fig = px.bar(
                 dept_aptitud,
-                'Aptitud Promedio por Departamento',
-                'bar',
                 x='Departamento',
                 y='Aptitud',
+                title='Aptitud Promedio por Departamento',
                 color='Aptitud',
                 color_continuous_scale='RdYlGn'
             )
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
 def show_advanced_analytics(df_empleados, df_asistencias):
     st.markdown('<div class="section-header">📈 Analytics Avanzado</div>', unsafe_allow_html=True)
@@ -1160,30 +1165,53 @@ def show_advanced_analytics(df_empleados, df_asistencias):
     
     with col1:
         # Matriz de correlación
-        numeric_cols = ['edad', 'experiencia_meses', 'salario', 'evaluacion_desempeno', 'ausencias_ultimo_mes']
-        corr_matrix = df_analytics[numeric_cols].corr()
+        numeric_cols = ['edad', 'experiencia_meses', 'evaluacion_desempeno', 'ausencias_ultimo_mes']
         
-        fig = px.imshow(
-            corr_matrix,
-            title='Matriz de Correlación entre Variables',
-            color_continuous_scale='RdBu_r',
-            aspect='auto'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Filtrar solo columnas numéricas que existen
+        available_numeric_cols = [col for col in numeric_cols if col in df_analytics.columns]
+        
+        if len(available_numeric_cols) >= 2:
+            corr_matrix = df_analytics[available_numeric_cols].corr()
+            
+            fig = px.imshow(
+                corr_matrix,
+                title='Matriz de Correlación entre Variables',
+                color_continuous_scale='RdBu_r',
+                aspect='auto'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos numéricos para la matriz de correlación")
     
     with col2:
-        # Segmentación por desempeño y potencial
-        fig = px.scatter(
-            df_analytics,
-            x='evaluacion_desempeno',
-            y='experiencia_meses',
-            color='nivel_riesgo',
-            size='salario',
-            title='Segmentación: Desempeño vs Experiencia',
-            hover_data=['nombre', 'apellido', 'departamento'],
-            color_discrete_map={'Alto': 'red', 'Medio': 'orange', 'Bajo': 'green'}
+        # Segmentación por desempeño y potencial - CORREGIDO
+        # Crear una columna de compensación unificada
+        df_analytics['compensacion'] = df_analytics.apply(
+            lambda x: x['salario'] if pd.notna(x['salario']) else (x['precio_hora_comun'] * 160 if pd.notna(x['precio_hora_comun']) else 0), 
+            axis=1
         )
-        st.plotly_chart(fig, use_container_width=True)
+        
+        # Filtrar datos válidos
+        scatter_data = df_analytics[
+            (df_analytics['evaluacion_desempeno'].notna()) & 
+            (df_analytics['experiencia_meses'].notna()) &
+            (df_analytics['compensacion'] > 0)
+        ]
+        
+        if not scatter_data.empty:
+            fig = px.scatter(
+                scatter_data,
+                x='evaluacion_desempeno',
+                y='experiencia_meses',
+                color='nivel_riesgo',
+                size='compensacion',
+                title='Segmentación: Desempeño vs Experiencia',
+                hover_data=['nombre', 'apellido', 'departamento'],
+                color_discrete_sequence=['red', 'orange', 'green']
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos suficientes para el gráfico de segmentación")
     
     # Análisis de clusters
     st.subheader("🎯 Segmentación Avanzada")
@@ -1201,20 +1229,26 @@ def show_advanced_analytics(df_empleados, df_asistencias):
             y=cluster_counts.values,
             title='Distribución de Segmentos',
             color=cluster_counts.index,
-            labels={'x': 'Segmento', 'y': 'Cantidad'}
+            labels={'x': 'Segmento', 'y': 'Cantidad'},
+            color_discrete_sequence=px.colors.qualitative.Set3
         )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        # Análisis de composición salarial por segmento
-        fig = px.box(
-            df_analytics,
-            x='cluster',
-            y='salario',
-            title='Distribución Salarial por Segmento',
-            color='cluster'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Análisis de composición salarial por segmento - CORREGIDO
+        box_data = df_analytics[df_analytics['compensacion'] > 0]
+        if not box_data.empty:
+            fig = px.box(
+                box_data,
+                x='cluster',
+                y='compensacion',
+                title='Distribución de Compensación por Segmento',
+                color='cluster',
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos de compensación para mostrar")
 
 def show_early_warnings(df_empleados, df_obras, df_asistencias):
     st.markdown('<div class="section-header">⚠️ Sistema de Alertas Tempranas</div>', unsafe_allow_html=True)
@@ -1366,39 +1400,56 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
     
     with col1:
         # Gastos vs Beneficios por obra
-        gb_por_obra = df_gastos_beneficios.merge(df_obras, left_on='obra_id', right_on='id')
-        gb_pivot = gb_por_obra.pivot_table(
-            values='monto', 
-            index='nombre', 
-            columns='tipo', 
-            aggfunc='sum'
-        ).fillna(0)
-        
-        fig = px.bar(
-            gb_pivot.reset_index(),
-            x='nombre',
-            y=['Gasto', 'Beneficio'],
-            title='Gastos vs Beneficios por Obra',
-            barmode='group'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            gb_por_obra = df_gastos_beneficios.merge(df_obras, left_on='obra_id', right_on='id')
+            
+            if 'nombre' in gb_por_obra.columns and 'tipo' in gb_por_obra.columns and 'monto' in gb_por_obra.columns:
+                gb_pivot = gb_por_obra.pivot_table(
+                    values='monto', 
+                    index='nombre', 
+                    columns='tipo', 
+                    aggfunc='sum'
+                ).fillna(0)
+                
+                if not gb_pivot.empty and len(gb_pivot) > 0:
+                    fig = px.bar(
+                        gb_pivot.reset_index(),
+                        x='nombre',
+                        y=['Gasto', 'Beneficio'],
+                        title='Gastos vs Beneficios por Obra',
+                        barmode='group'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No hay datos suficientes para el gráfico de gastos vs beneficios")
+            else:
+                st.error("Faltan columnas necesarias en los datos")
+                
+        except Exception as e:
+            st.error(f"Error al generar el gráfico: {str(e)}")
     
     with col2:
         # Evolución temporal de gastos y beneficios
-        df_gastos_beneficios['fecha'] = pd.to_datetime(df_gastos_beneficios['fecha'])
-        df_gastos_beneficios['mes'] = df_gastos_beneficios['fecha'].dt.to_period('M').astype(str)
-        
-        evolucion_mensual = df_gastos_beneficios.groupby(['mes', 'tipo'])['monto'].sum().reset_index()
-        
-        fig = px.line(
-            evolucion_mensual,
-            x='mes',
-            y='monto',
-            color='tipo',
-            title='Evolución Mensual de Gastos y Beneficios',
-            markers=True
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            df_gastos_beneficios['fecha'] = pd.to_datetime(df_gastos_beneficios['fecha'])
+            df_gastos_beneficios['mes'] = df_gastos_beneficios['fecha'].dt.to_period('M').astype(str)
+            
+            evolucion_mensual = df_gastos_beneficios.groupby(['mes', 'tipo'])['monto'].sum().reset_index()
+            
+            if not evolucion_mensual.empty:
+                fig = px.line(
+                    evolucion_mensual,
+                    x='mes',
+                    y='monto',
+                    color='tipo',
+                    title='Evolución Mensual de Gastos y Beneficios',
+                    markers=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hay datos para la evolución temporal")
+        except Exception as e:
+            st.error(f"Error en evolución temporal: {str(e)}")
     
     # Análisis detallado por concepto
     st.subheader("📊 Análisis Detallado por Concepto")
@@ -1408,27 +1459,33 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
     with col1:
         # Gastos por concepto
         gastos_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Gasto']
-        gastos_por_concepto = gastos_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
-        
-        fig = px.pie(
-            values=gastos_por_concepto.values,
-            names=gastos_por_concepto.index,
-            title='Distribución de Gastos por Concepto'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if not gastos_concepto.empty:
+            gastos_por_concepto = gastos_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
+            
+            fig = px.pie(
+                values=gastos_por_concepto.values,
+                names=gastos_por_concepto.index,
+                title='Distribución de Gastos por Concepto'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos de gastos por concepto")
     
     with col2:
         # Beneficios por concepto
         beneficios_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Beneficio']
-        beneficios_por_concepto = beneficios_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
-        
-        fig = px.bar(
-            x=beneficios_por_concepto.values,
-            y=beneficios_por_concepto.index,
-            title='Beneficios por Concepto',
-            orientation='h'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if not beneficios_concepto.empty:
+            beneficios_por_concepto = beneficios_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
+            
+            fig = px.bar(
+                x=beneficios_por_concepto.values,
+                y=beneficios_por_concepto.index,
+                title='Beneficios por Concepto',
+                orientation='h'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos de beneficios por concepto")
 
 def show_turnover_analysis(df_rotacion, df_empleados):
     st.markdown('<div class="section-header">🔄 Análisis de Rotación Personal</div>', unsafe_allow_html=True)
@@ -1519,37 +1576,7 @@ def show_turnover_analysis(df_rotacion, df_empleados):
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    # Análisis geográfico de rotación
-    st.subheader("🗺️ Análisis Geográfico de Rotación")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Rotación por área
-        rotacion_area = filtered_rotacion.groupby('area')['rotacion_mensual'].mean().sort_values(ascending=False)
-        
-        fig = px.pie(
-            values=rotacion_area.values * 100,
-            names=rotacion_area.index,
-            title='Distribución de Rotación por Área (%)'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Rotación por ciudad
-        rotacion_ciudad = filtered_rotacion.groupby('ciudad')['rotacion_mensual'].mean().sort_values(ascending=False)
-        
-        fig = px.bar(
-            x=rotacion_ciudad.index,
-            y=rotacion_ciudad.values * 100,
-            title='Rotación Promedio por Ciudad (%)',
-            labels={'x': 'Ciudad', 'y': 'Rotación (%)'},
-            color=rotacion_ciudad.values,
-            color_continuous_scale='Purples'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Heatmap de rotación (corregido)
+    # Heatmap de rotación
     st.subheader("🌐 Mapa de Calor - Rotación por Departamento y Área")
     
     try:
@@ -1571,9 +1598,7 @@ def show_turnover_analysis(df_rotacion, df_empleados):
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Error generando el heatmap: {str(e)}")
-        # Alternativa si falla el heatmap
-        st.info("Mostrando datos en formato tabla:")
-        st.dataframe(heatmap_data)
+        st.dataframe(filtered_rotacion.head(10))
 
 def show_configuration():
     st.markdown('<div class="section-header">⚙️ Configuración del Sistema</div>', unsafe_allow_html=True)
@@ -1613,21 +1638,6 @@ def show_configuration():
         st.selectbox("Método de Notificación", ["Email", "SMS", "Ambos"])
         st.text_input("Email de Contacto", "admin@empresa.com")
     
-    # Configuración de integraciones
-    st.subheader("🔗 Integraciones")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.text_input("API Key Sistema de Nómina")
-        st.text_input("URL Base de Datos")
-        st.text_input("Token de Autenticación")
-    
-    with col2:
-        st.checkbox("Sincronización Automática", value=True)
-        st.number_input("Intervalo Sincronización (min)", min_value=5, max_value=1440, value=60)
-        st.selectbox("Nivel de Log", ["DEBUG", "INFO", "WARNING", "ERROR"])
-    
     # Acciones del sistema
     st.subheader("🛠️ Acciones del Sistema")
     
@@ -1636,32 +1646,31 @@ def show_configuration():
     with col1:
         if st.button("🔄 Sincronizar Datos", use_container_width=True):
             st.success("Datos sincronizados correctamente")
-        
         if st.button("📊 Generar Reporte", use_container_width=True):
             st.success("Reporte generado y enviado")
     
     with col2:
         if st.button("💾 Respaldar Base", use_container_width=True):
             st.success("Respaldo completado exitosamente")
-        
         if st.button("🧹 Limpiar Cache", use_container_width=True):
             st.success("Cache limpiado correctamente")
     
     with col3:
         if st.button("🔍 Ver Logs", use_container_width=True):
             st.info("Mostrando logs del sistema...")
-        
         if st.button("🔄 Reiniciar Sistema", use_container_width=True):
             st.warning("Reiniciando sistema...")
 
 def show_dashboard_manual():
-    st.markdown('<div class="section-header">📖 Manual del Dashboard RRHH Analytics Pro</div>', unsafe_allow_html=True)
+    st.markdown('<div class="manual-title">📖 Manual del Dashboard RRHH Analytics Pro</div>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div class="manual-section">
-    <h3>🎯 Descripción General</h3>
-    <p>El <strong>RRHH Analytics Pro</strong> es un sistema integral de gestión de recursos humanos diseñado para la industria de la construcción. 
-    Combina análisis avanzados, visualizaciones interactivas y herramientas de gestión para optimizar la fuerza laboral.</p>
+    <div class="manual-description">
+    <h3 style='color: white; margin: 0; text-align: center;'>🎯 Descripción General</h3>
+    <p style='color: white; font-size: 1.1rem; margin: 0.5rem 0 0 0; text-align: center;'>
+    El <strong>RRHH Analytics Pro</strong> es un sistema integral de gestión de recursos humanos diseñado para la industria de la construcción. 
+    Combina análisis avanzados, visualizaciones interactivas y herramientas de gestión para optimizar la fuerza laboral.
+    </p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1811,4 +1820,3 @@ def show_dashboard_manual():
 
 if __name__ == "__main__":
     main()
- 
