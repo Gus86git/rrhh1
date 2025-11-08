@@ -1804,16 +1804,7 @@ def show_configuration():
 
 def show_dashboard_manual():
     st.markdown('<div class="manual-title">📖 Manual del Dashboard RRHH Analytics Pro</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="manual-description">
-    <h3 style='color: white; margin: 0; text-align: center;'>🎯 Descripción General</h3>
-    <p style='color: white; font-size: 1.1rem; margin: 0.5rem 0 0 0; text-align: center;'>
-    El <strong>RRHH Analytics Pro</strong> es un sistema integral de gestión de recursos humanos diseñado para la industria de la construcción. 
-    Combina análisis avanzados, visualizaciones interactivas y herramientas de gestión para optimizar la fuerza laboral.
-    </p>
-    </div>
-    """, unsafe_allow_html=True)
+
     
     # Módulos del Dashboard
     st.subheader("📋 Módulos Disponibles")
