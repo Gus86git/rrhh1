@@ -149,14 +149,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def generar_datos_financieros_demo(df_obras):
+def generar_datos_financieros_demo(obras_lista):
     """Generar datos financieros de demostración completos"""
     gastos_beneficios = []
     
     conceptos_gastos = ['Materiales', 'Mano de Obra', 'Equipos', 'Logística', 'Administrativo']
     conceptos_beneficios = ['Avance de Obra', 'Eficiencia', 'Ahorro Materiales', 'Bonos Calidad', 'Incentivos']
     
-    for obra in df_obras.to_dict('records'):
+    for obra in obras_lista:
         # Generar gastos
         for _ in range(np.random.randint(8, 20)):
             gastos_beneficios.append({
@@ -404,10 +404,13 @@ def load_data():
     
     df_rotacion = pd.DataFrame(rotacion_data)
     
-    # Generar datos de gastos y beneficios usando la nueva función
-    df_gastos_beneficios = generar_datos_financieros_demo(obras)
+    # Generar datos de gastos y beneficios usando la nueva función CORREGIDA
+    df_gastos_beneficios = generar_datos_financieros_demo(obras)  # Pasar la lista 'obras', no el DataFrame
     
     return df_empleados, df_obras, df_asistencias, df_rotacion, df_gastos_beneficios
+
+# ... (el resto del código se mantiene exactamente igual desde aquí)
+# [TODAS LAS FUNCIONES RESTANTES SE MANTIENEN IGUAL - show_executive_dashboard, show_person_management, etc.]
 
 def create_advanced_plotly_chart(data, title, chart_type='bar', **kwargs):
     """Función avanzada para crear gráficos Plotly con estilo Power BI"""
@@ -444,6 +447,96 @@ def create_advanced_plotly_chart(data, title, chart_type='bar', **kwargs):
                 fig = px.box(data, **kwargs)
             else:
                 fig = px.bar(data, **kwargs)
+        
+        # Estilo Power BI
+        fig.update_layout(
+            title=dict(
+                text=title,
+                x=0.5,
+                xanchor='center',
+                font=dict(size=20, color='#2c3e50')
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#2c3e50'),
+            height=400,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        
+        return fig
+    except Exception as e:
+        st.error(f"Error creando gráfico {title}: {str(e)}")
+        return None
+
+def main():
+    # Header principal
+    st.markdown('<h1 class="main-header">🏗️ RRHH Analytics Pro</h1>', unsafe_allow_html=True)
+    
+    # Cargar datos
+    df_empleados, df_obras, df_asistencias, df_rotacion, df_gastos_beneficios = load_data()
+    
+    # Sidebar - Navegación
+    st.sidebar.title("🏢 RRHH Analytics Pro")
+    st.sidebar.markdown("---")
+    
+    menu = st.sidebar.radio(
+        "📋 Módulos:",
+        ["📊 Dashboard Ejecutivo", "👥 Gestión de Personal", "🏗️ Gestión de Obras", 
+         "🎯 Aptitud para Obras", "📈 Analytics Avanzado", "⚠️ Alertas", 
+         "💰 Análisis Financiero", "🔄 Rotación Personal", "📖 Manual del Dashboard", "⚙️ Configuración"]
+    )
+    
+    # KPIs Principales - Siempre visibles
+    st.markdown("### 📈 Métricas Clave en Tiempo Real")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        total_empleados = len(df_empleados[df_empleados['activo']])
+        st.metric("👥 Empleados Activos", total_empleados, delta="+5%")
+    
+    with col2:
+        aptos_obra_compleja = len(df_empleados[(df_empleados['activo']) & (df_empleados['apto_obra_compleja'])])
+        st.metric("✅ Aptos Obra Compleja", aptos_obra_compleja, delta="+8%")
+    
+    with col3:
+        productividad_promedio = df_asistencias['productividad'].mean()
+        st.metric("📊 Productividad", f"{productividad_promedio:.1f}%", delta="+2.1%")
+    
+    with col4:
+        rotacion = len(df_empleados[~df_empleados['activo']]) / len(df_empleados) * 100
+        st.metric("🔄 Rotación", f"{rotacion:.1f}%", delta="-1.2%", delta_color="inverse")
+    
+    with col5:
+        obras_activas = len(df_obras[df_obras['estado'] == 'En Progreso'])
+        st.metric("🏗️ Obras Activas", obras_activas)
+    
+    st.markdown("---")
+    
+    # Contenido según menú seleccionado
+    if menu == "📊 Dashboard Ejecutivo":
+        show_executive_dashboard(df_empleados, df_obras, df_asistencias, df_rotacion, df_gastos_beneficios)
+    elif menu == "👥 Gestión de Personal":
+        show_person_management(df_empleados, df_asistencias)
+    elif menu == "🏗️ Gestión de Obras":
+        show_project_management(df_obras, df_asistencias, df_empleados)
+    elif menu == "🎯 Aptitud para Obras":
+        show_aptitude_analysis(df_empleados, df_obras)
+    elif menu == "📈 Analytics Avanzado":
+        show_advanced_analytics(df_empleados, df_asistencias)
+    elif menu == "⚠️ Alertas":
+        show_early_warnings(df_empleados, df_obras, df_asistencias)
+    elif menu == "💰 Análisis Financiero":
+        show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados)
+    elif menu == "🔄 Rotación Personal":
+        show_turnover_analysis(df_rotacion, df_empleados)
+    elif menu == "📖 Manual del Dashboard":
+        show_dashboard_manual()
+    elif menu == "⚙️ Configuración":
+        show_configuration()
+
+# ... [TODAS LAS DEMÁS FUNCIONES SE MANTIENEN EXACTAMENTE IGUAL]
+
+# Solo copia desde aquí hasta el final del código anterior, reemplazando SOLO la función load_data y generar_datos_financieros_demo
         
         # Estilo Power BI
         fig.update_layout(
