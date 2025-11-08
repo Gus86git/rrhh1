@@ -149,6 +149,40 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def generar_datos_financieros_demo(df_obras):
+    """Generar datos financieros de demostración completos"""
+    gastos_beneficios = []
+    
+    conceptos_gastos = ['Materiales', 'Mano de Obra', 'Equipos', 'Logística', 'Administrativo']
+    conceptos_beneficios = ['Avance de Obra', 'Eficiencia', 'Ahorro Materiales', 'Bonos Calidad', 'Incentivos']
+    
+    for obra in df_obras.to_dict('records'):
+        # Generar gastos
+        for _ in range(np.random.randint(8, 20)):
+            gastos_beneficios.append({
+                'obra_id': obra['id'],
+                'tipo': 'Gasto',
+                'concepto': np.random.choice(conceptos_gastos),
+                'monto': np.random.uniform(5000, 150000),
+                'fecha': datetime.now() - timedelta(days=np.random.randint(1, 180)),
+                'descripcion': f"Gasto en {np.random.choice(conceptos_gastos)} para {obra['nombre']}",
+                'categoria': 'Operativo' if np.random.random() > 0.3 else 'Administrativo'
+            })
+        
+        # Generar beneficios
+        for _ in range(np.random.randint(5, 15)):
+            gastos_beneficios.append({
+                'obra_id': obra['id'],
+                'tipo': 'Beneficio',
+                'concepto': np.random.choice(conceptos_beneficios),
+                'monto': np.random.uniform(10000, 200000),
+                'fecha': datetime.now() - timedelta(days=np.random.randint(1, 180)),
+                'descripcion': f"Beneficio por {np.random.choice(conceptos_beneficios)} en {obra['nombre']}",
+                'categoria': 'Ingreso'
+            })
+    
+    return pd.DataFrame(gastos_beneficios)
+
 @st.cache_data
 def load_data():
     """Generar datos sintéticos completos para la demo"""
@@ -370,28 +404,8 @@ def load_data():
     
     df_rotacion = pd.DataFrame(rotacion_data)
     
-    # Generar datos de gastos y beneficios
-    gastos_beneficios = []
-    for obra in obras:
-        for _ in range(np.random.randint(5, 15)):
-            gastos_beneficios.append({
-                'obra_id': obra['id'],
-                'tipo': 'Gasto',
-                'concepto': np.random.choice(['Materiales', 'Mano de Obra', 'Equipos', 'Logística']),
-                'monto': np.random.uniform(10000, 200000),
-                'fecha': datetime.now() - timedelta(days=np.random.randint(1, 180))
-            })
-        
-        for _ in range(np.random.randint(2, 8)):
-            gastos_beneficios.append({
-                'obra_id': obra['id'],
-                'tipo': 'Beneficio',
-                'concepto': np.random.choice(['Avance de Obra', 'Eficiencia', 'Ahorro Materiales']),
-                'monto': np.random.uniform(50000, 300000),
-                'fecha': datetime.now() - timedelta(days=np.random.randint(1, 180))
-            })
-    
-    df_gastos_beneficios = pd.DataFrame(gastos_beneficios)
+    # Generar datos de gastos y beneficios usando la nueva función
+    df_gastos_beneficios = generar_datos_financieros_demo(obras)
     
     return df_empleados, df_obras, df_asistencias, df_rotacion, df_gastos_beneficios
 
@@ -1375,6 +1389,11 @@ def show_early_warnings(df_empleados, df_obras, df_asistencias):
 def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
     st.markdown('<div class="section-header">💰 Análisis Financiero Integral</div>', unsafe_allow_html=True)
     
+    # Mejorar datos ficticios para el análisis financiero
+    if df_gastos_beneficios.empty or 'obra_id' not in df_gastos_beneficios.columns:
+        st.warning("Generando datos financieros de demostración...")
+        df_gastos_beneficios = generar_datos_financieros_demo(df_obras)
+    
     # Métricas financieras
     col1, col2, col3, col4 = st.columns(4)
     
@@ -1394,6 +1413,33 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
     with col4:
         roi = (total_beneficios / total_gastos * 100) if total_gastos > 0 else 0
         st.metric("📈 ROI", f"{roi:.1f}%")
+
+    # Insights financieros
+    st.subheader("💡 Insights Financieros")
+    
+    # Calcular métricas para insights
+    gastos_por_obra = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Gasto'].groupby('obra_id')['monto'].sum()
+    beneficios_por_obra = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Beneficio'].groupby('obra_id')['monto'].sum()
+    
+    obra_mayor_gasto = gastos_por_obra.idxmax() if not gastos_por_obra.empty else "N/A"
+    obra_mayor_beneficio = beneficios_por_obra.idxmax() if not beneficios_por_obra.empty else "N/A"
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.info(f"**Obra con mayor gasto:** {obra_mayor_gasto}")
+        st.info(f"**Obra con mayor beneficio:** {obra_mayor_beneficio}")
+    
+    with col2:
+        gasto_promedio = gastos_por_obra.mean() if not gastos_por_obra.empty else 0
+        beneficio_promedio = beneficios_por_obra.mean() if not beneficios_por_obra.empty else 0
+        st.info(f"**Gasto promedio por obra:** ${gasto_promedio:,.0f}")
+        st.info(f"**Beneficio promedio por obra:** ${beneficio_promedio:,.0f}")
+    
+    with col3:
+        margen_beneficio = (total_beneficios - total_gastos) / total_beneficios * 100 if total_beneficios > 0 else 0
+        st.info(f"**Margen de beneficio:** {margen_beneficio:.1f}%")
+        st.info(f"**Total transacciones:** {len(df_gastos_beneficios)}")
     
     # Gráficos de análisis financiero
     col1, col2 = st.columns(2)
@@ -1403,7 +1449,7 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
         try:
             gb_por_obra = df_gastos_beneficios.merge(df_obras, left_on='obra_id', right_on='id')
             
-            if 'nombre' in gb_por_obra.columns and 'tipo' in gb_por_obra.columns and 'monto' in gb_por_obra.columns:
+            if not gb_por_obra.empty:
                 gb_pivot = gb_por_obra.pivot_table(
                     values='monto', 
                     index='nombre', 
@@ -1411,43 +1457,71 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
                     aggfunc='sum'
                 ).fillna(0)
                 
-                if not gb_pivot.empty and len(gb_pivot) > 0:
+                if not gb_pivot.empty:
                     fig = px.bar(
                         gb_pivot.reset_index(),
                         x='nombre',
                         y=['Gasto', 'Beneficio'],
                         title='Gastos vs Beneficios por Obra',
-                        barmode='group'
+                        barmode='group',
+                        color_discrete_map={'Gasto': '#e74c3c', 'Beneficio': '#2ecc71'}
                     )
+                    fig.update_layout(xaxis_tickangle=-45)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("No hay datos suficientes para el gráfico de gastos vs beneficios")
             else:
-                st.error("Faltan columnas necesarias en los datos")
+                st.info("No hay datos de obras para mostrar")
                 
         except Exception as e:
             st.error(f"Error al generar el gráfico: {str(e)}")
+            # Mostrar datos alternativos
+            st.info("Datos financieros disponibles:")
+            st.dataframe(df_gastos_beneficios.head())
     
     with col2:
         # Evolución temporal de gastos y beneficios
         try:
-            df_gastos_beneficios['fecha'] = pd.to_datetime(df_gastos_beneficios['fecha'])
-            df_gastos_beneficios['mes'] = df_gastos_beneficios['fecha'].dt.to_period('M').astype(str)
-            
-            evolucion_mensual = df_gastos_beneficios.groupby(['mes', 'tipo'])['monto'].sum().reset_index()
-            
-            if not evolucion_mensual.empty:
+            if 'fecha' in df_gastos_beneficios.columns:
+                df_gastos_beneficios['fecha'] = pd.to_datetime(df_gastos_beneficios['fecha'])
+                df_gastos_beneficios['mes'] = df_gastos_beneficios['fecha'].dt.to_period('M').astype(str)
+                
+                evolucion_mensual = df_gastos_beneficios.groupby(['mes', 'tipo'])['monto'].sum().reset_index()
+                
+                if not evolucion_mensual.empty:
+                    fig = px.line(
+                        evolucion_mensual,
+                        x='mes',
+                        y='monto',
+                        color='tipo',
+                        title='Evolución Mensual de Gastos y Beneficios',
+                        markers=True,
+                        color_discrete_map={'Gasto': '#e74c3c', 'Beneficio': '#2ecc71'}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No hay datos para la evolución temporal")
+            else:
+                # Si no hay fecha, crear una evolución simulada
+                st.info("Generando evolución temporal de demostración...")
+                meses = ['2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06']
+                datos_evolucion = []
+                for mes in meses:
+                    datos_evolucion.append({'mes': mes, 'tipo': 'Gasto', 'monto': np.random.uniform(50000, 200000)})
+                    datos_evolucion.append({'mes': mes, 'tipo': 'Beneficio', 'monto': np.random.uniform(60000, 250000)})
+                
+                evolucion_mensual = pd.DataFrame(datos_evolucion)
                 fig = px.line(
                     evolucion_mensual,
                     x='mes',
                     y='monto',
                     color='tipo',
-                    title='Evolución Mensual de Gastos y Beneficios',
-                    markers=True
+                    title='Evolución Mensual de Gastos y Beneficios (Demo)',
+                    markers=True,
+                    color_discrete_map={'Gasto': '#e74c3c', 'Beneficio': '#2ecc71'}
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No hay datos para la evolución temporal")
+                
         except Exception as e:
             st.error(f"Error en evolución temporal: {str(e)}")
     
@@ -1459,33 +1533,100 @@ def show_financial_analysis(df_gastos_beneficios, df_obras, df_empleados):
     with col1:
         # Gastos por concepto
         gastos_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Gasto']
-        if not gastos_concepto.empty:
+        if not gastos_concepto.empty and 'concepto' in gastos_concepto.columns:
             gastos_por_concepto = gastos_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
             
             fig = px.pie(
                 values=gastos_por_concepto.values,
                 names=gastos_por_concepto.index,
-                title='Distribución de Gastos por Concepto'
+                title='Distribución de Gastos por Concepto',
+                color_discrete_sequence=px.colors.sequential.Reds
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No hay datos de gastos por concepto")
+            # Datos de demostración
+            conceptos_gastos = ['Materiales', 'Mano de Obra', 'Equipos', 'Logística', 'Administrativo']
+            montos_gastos = [45, 25, 15, 10, 5]
+            fig = px.pie(values=montos_gastos, names=conceptos_gastos, 
+                        title='Distribución de Gastos por Concepto (Demo)',
+                        color_discrete_sequence=px.colors.sequential.Reds)
+            st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         # Beneficios por concepto
         beneficios_concepto = df_gastos_beneficios[df_gastos_beneficios['tipo'] == 'Beneficio']
-        if not beneficios_concepto.empty:
+        if not beneficios_concepto.empty and 'concepto' in beneficios_concepto.columns:
             beneficios_por_concepto = beneficios_concepto.groupby('concepto')['monto'].sum().sort_values(ascending=False)
             
             fig = px.bar(
                 x=beneficios_por_concepto.values,
                 y=beneficios_por_concepto.index,
                 title='Beneficios por Concepto',
-                orientation='h'
+                orientation='h',
+                color=beneficios_por_concepto.values,
+                color_continuous_scale='Greens'
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No hay datos de beneficios por concepto")
+            # Datos de demostración
+            conceptos_beneficios = ['Avance de Obra', 'Eficiencia', 'Ahorro Materiales', 'Bonos Calidad']
+            montos_beneficios = [120000, 80000, 60000, 40000]
+            fig = px.bar(x=montos_beneficios, y=conceptos_beneficios, 
+                        title='Beneficios por Concepto (Demo)',
+                        orientation='h',
+                        color=montos_beneficios,
+                        color_continuous_scale='Greens')
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Análisis de rentabilidad por obra
+    st.subheader("🏗️ Rentabilidad por Obra")
+    
+    try:
+        # Calcular rentabilidad por obra
+        rentabilidad_obras = []
+        for obra_id in df_gastos_beneficios['obra_id'].unique():
+            gastos_obra = df_gastos_beneficios[
+                (df_gastos_beneficios['obra_id'] == obra_id) & 
+                (df_gastos_beneficios['tipo'] == 'Gasto')
+            ]['monto'].sum()
+            
+            beneficios_obra = df_gastos_beneficios[
+                (df_gastos_beneficios['obra_id'] == obra_id) & 
+                (df_gastos_beneficios['tipo'] == 'Beneficio')
+            ]['monto'].sum()
+            
+            rentabilidad = (beneficios_obra - gastos_obra) / gastos_obra * 100 if gastos_obra > 0 else 0
+            
+            # Obtener nombre de la obra
+            obra_nombre = df_obras[df_obras['id'] == obra_id]['nombre'].iloc[0] if not df_obras[df_obras['id'] == obra_id].empty else f"Obra {obra_id}"
+            
+            rentabilidad_obras.append({
+                'obra': obra_nombre,
+                'gastos': gastos_obra,
+                'beneficios': beneficios_obra,
+                'rentabilidad': rentabilidad
+            })
+        
+        df_rentabilidad = pd.DataFrame(rentabilidad_obras)
+        
+        if not df_rentabilidad.empty:
+            fig = px.bar(
+                df_rentabilidad.sort_values('rentabilidad', ascending=False).head(10),
+                x='obra',
+                y='rentabilidad',
+                title='Top 10 Obras por Rentabilidad (%)',
+                color='rentabilidad',
+                color_continuous_scale='RdYlGn'
+            )
+            fig.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos de rentabilidad para mostrar")
+            
+    except Exception as e:
+        st.error(f"Error en análisis de rentabilidad: {str(e)}")
 
 def show_turnover_analysis(df_rotacion, df_empleados):
     st.markdown('<div class="section-header">🔄 Análisis de Rotación Personal</div>', unsafe_allow_html=True)
