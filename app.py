@@ -532,7 +532,7 @@ def main():
         show_configuration()
 
 def show_executive_dashboard(df_empleados, df_obras, df_asistencias, df_rotacion, df_gastos_beneficios):
-    st.markdown('<div class="section-header">📊 Dashboard Ejecutivo - Vista Power BI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Dashboard Ejecutivo</div>', unsafe_allow_html=True)
     
     # Descripción General con mejor contraste
     st.markdown("""
